@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>StockSignal — AI Stock Predictions</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg:      #08090d;
+  --surface: #0f1117;
+  --card:    #13161e;
+  --border:  rgba(255,255,255,0.06);
+  --text:    #e2e8f0;
+  --muted:   #4a5568;
+  --green:   #00e676;
+  --red:     #ff4444;
+  --yellow:  #fbbf24;
+  --blue:    #3b82f6;
+  --accent:  #6366f1;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;min-height:100vh}
+
+/* ── HEADER ── */
+header{background:rgba(13,14,20,.95);backdrop-filter:blur(20px);border-bottom:1px solid var(--border);padding:0 32px;height:64px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
+.logo{display:flex;align-items:center;gap:10px}
+.logo-icon{width:32px;height:32px;background:linear-gradient(135deg,var(--accent),var(--blue));border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px}
+.logo-text{font-size:18px;font-weight:700;letter-spacing:-.5px}
+.logo-text span{color:var(--accent)}
+.header-meta{font-size:11px;color:var(--muted);text-align:right}
+#lastUpdated{color:var(--text);font-weight:500}
+
+/* ── HERO ── */
+.hero{padding:48px 32px 32px;max-width:1200px;margin:0 auto}
+.hero h1{font-size:clamp(28px,4vw,48px);font-weight:800;line-height:1.1;letter-spacing:-1px;margin-bottom:12px}
+.hero h1 em{background:linear-gradient(135deg,var(--accent),var(--blue));-webkit-background-clip:text;-webkit-text-fill-color:transparent;font-style:normal}
+.hero p{color:var(--muted);font-size:14px;max-width:560px;line-height:1.7}
+.hero-stats{display:flex;gap:16px;margin-top:24px;flex-wrap:wrap}
+.hstat{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 20px;font-size:12px}
+.hstat-v{font-size:22px;font-weight:700;color:var(--accent);font-variant-numeric:tabular-nums}
+.hstat-l{color:var(--muted);margin-top:2px;font-size:11px;text-transform:uppercase;letter-spacing:.5px}
+
+/* ── TABS ── */
+.tabs-bar{max-width:1200px;margin:0 auto;padding:0 32px 24px;display:flex;gap:8px}
+.tab-btn{padding:8px 20px;border-radius:8px;border:1px solid var(--border);background:var(--card);color:var(--muted);font-size:13px;font-weight:600;cursor:pointer;transition:all .15s}
+.tab-btn.active{background:var(--accent);border-color:var(--accent);color:#fff}
+
+/* ── SECTION ── */
+.section{max-width:1200px;margin:0 auto;padding:0 32px 48px;display:none}
+.section.visible{display:block}
+.section-header{display:flex;align-items:baseline;gap:12px;margin-bottom:20px}
+.section-title{font-size:20px;font-weight:700}
+.section-sub{font-size:12px;color:var(--muted)}
+
+/* ── STOCK GRID ── */
+.stock-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:20px}
+
+/* ── STOCK CARD ── */
+.stock-card{background:var(--card);border:1px solid var(--border);border-radius:16px;overflow:hidden;transition:border-color .2s,transform .2s}
+.stock-card:hover{border-color:rgba(99,102,241,.3);transform:translateY(-2px)}
+.sc-head{padding:16px 18px 12px;display:flex;justify-content:space-between;align-items:flex-start}
+.sc-ticker{font-size:20px;font-weight:800;letter-spacing:-.5px}
+.sc-name{font-size:11px;color:var(--muted);margin-top:2px}
+.signal-badge{font-size:10px;font-weight:700;padding:4px 10px;border-radius:6px;letter-spacing:.5px;text-transform:uppercase;flex-shrink:0}
+.signal-Bullish{background:rgba(0,230,118,.12);color:var(--green);border:1px solid rgba(0,230,118,.25)}
+.signal-Bearish{background:rgba(255,68,68,.1);color:var(--red);border:1px solid rgba(255,68,68,.2)}
+.signal-Neutral{background:rgba(251,191,36,.1);color:var(--yellow);border:1px solid rgba(251,191,36,.2)}
+.sc-prices{padding:0 18px 14px;display:flex;gap:24px}
+.sc-price-block{}
+.sc-price-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px}
+.sc-price-val{font-size:18px;font-weight:700;font-variant-numeric:tabular-nums}
+.sc-pct{font-size:13px;font-weight:600;margin-left:6px}
+.sc-pct.up{color:var(--green)}
+.sc-pct.down{color:var(--red)}
+.sc-pct.flat{color:var(--yellow)}
+.sc-chart-wrap{padding:0 6px 6px;height:160px;position:relative}
+.sc-footer{padding:10px 18px;background:rgba(255,255,255,.018);border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
+.sc-conf-label{font-size:10px;color:var(--muted)}
+.sc-conf-val{font-size:12px;font-weight:600;color:var(--accent)}
+.sc-horizon{font-size:10px;color:var(--muted);text-align:right}
+
+/* ── RANK BADGE ── */
+.rank-badge{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:6px;font-size:11px;font-weight:800;margin-right:8px;flex-shrink:0}
+.rank-1{background:linear-gradient(135deg,#ffd700,#ffa500);color:#000}
+.rank-2{background:linear-gradient(135deg,#c0c0c0,#a0a0a0);color:#000}
+.rank-3{background:linear-gradient(135deg,#cd7f32,#a0522d);color:#fff}
+.rank-4,.rank-5{background:var(--surface);color:var(--muted);border:1px solid var(--border)}
+
+/* ── LOADING / ERROR ── */
+#loadingState{text-align:center;padding:80px 32px;color:var(--muted)}
+.spinner{width:36px;height:36px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 16px}
+@keyframes spin{to{transform:rotate(360deg)}}
+#errorState{text-align:center;padding:80px 32px;display:none}
+.error-box{background:rgba(255,68,68,.08);border:1px solid rgba(255,68,68,.2);border-radius:12px;padding:24px;max-width:480px;margin:0 auto;font-size:13px;line-height:1.6;color:var(--muted)}
+
+/* ── DISCLAIMER ── */
+.disclaimer{max-width:1200px;margin:0 auto;padding:0 32px 48px}
+.disc-inner{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px 20px;font-size:11px;color:var(--muted);line-height:1.6}
+
+/* ── RESPONSIVE ── */
+@media(max-width:720px){
+  header{padding:0 16px}
+  .hero,.tabs-bar,.section,.disclaimer{padding-left:16px;padding-right:16px}
+  .stock-grid{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">📈</div>
+    <div class="logo-text">Stock<span>Signal</span></div>
+  </div>
+  <div class="header-meta">
+    Last updated: <span id="lastUpdated">—</span>
+  </div>
+</header>
+
+<div id="loadingState">
+  <div class="spinner"></div>
+  <div>Loading predictions…</div>
+</div>
+
+<div id="errorState">
+  <div class="error-box">
+    <strong style="color:var(--red)">⚠ Could not load predictions</strong><br><br>
+    The data file hasn't been generated yet. Run <code>python update_predictions.py</code> locally
+    or wait for the daily GitHub Actions workflow to complete.
+  </div>
+</div>
+
+<div id="appContent" style="display:none">
+  <div class="hero">
+    <h1>AI-Powered<br><em>Stock Predictions</em></h1>
+    <p>Machine learning predictions for S&P 500 stocks. Linear regression trained on price history,
+       momentum and volatility signals. Updated daily via GitHub Actions.</p>
+    <div class="hero-stats">
+      <div class="hstat"><div class="hstat-v">500</div><div class="hstat-l">Companies scanned</div></div>
+      <div class="hstat"><div class="hstat-v">5</div><div class="hstat-l">Short-term picks</div></div>
+      <div class="hstat"><div class="hstat-v">5</div><div class="hstat-l">Long-term picks</div></div>
+      <div class="hstat"><div class="hstat-v" id="statShortAvg">—</div><div class="hstat-l">Avg short gain</div></div>
+    </div>
+  </div>
+
+  <div class="tabs-bar">
+    <button class="tab-btn active" onclick="showTab('short')">⚡ Short-Term <span style="font-size:10px;opacity:.6">(~7 days)</span></button>
+    <button class="tab-btn" onclick="showTab('long')">📅 Long-Term <span style="font-size:10px;opacity:.6">(~30 days)</span></button>
+  </div>
+
+  <div class="section visible" id="section-short">
+    <div class="section-header">
+      <div class="section-title">Top 5 Short-Term Picks</div>
+      <div class="section-sub">Predicted over the next 7 trading days · Bullish signal only</div>
+    </div>
+    <div class="stock-grid" id="grid-short"></div>
+  </div>
+
+  <div class="section" id="section-long">
+    <div class="section-header">
+      <div class="section-title">Top 5 Long-Term Picks</div>
+      <div class="section-sub">Predicted over the next 30 trading days · Bullish signal only</div>
+    </div>
+    <div class="stock-grid" id="grid-long"></div>
+  </div>
+</div>
+
+<div class="disclaimer">
+  <div class="disc-inner">
+    ⚠ <strong>Disclaimer:</strong> StockSignal is for informational and educational purposes only.
+    Predictions are generated by a simple linear regression model and do <strong>not</strong> constitute
+    financial advice. Past performance does not guarantee future results. Always do your own research
+    before making investment decisions. <strong>Never invest money you cannot afford to lose.</strong>
+  </div>
+</div>
+
+<script>
+// ── Tab switcher ──────────────────────────────────────────────────────────
+function showTab(tab) {
+  document.querySelectorAll('.tab-btn').forEach((b,i) => b.classList.toggle('active', i === (tab==='short'?0:1)));
+  document.getElementById('section-short').classList.toggle('visible', tab==='short');
+  document.getElementById('section-long').classList.toggle('visible', tab==='long');
+}
+
+// ── Build a stock card ───────────────────────────────────────────────────
+const chartInstances = {};
+
+function buildCard(stock, pred, horizon, rank, canvasId) {
+  const pct    = pred.pct_change;
+  const pctCls = pct > 0 ? 'up' : pct < 0 ? 'down' : 'flat';
+  const pctStr = (pct > 0 ? '+' : '') + pct.toFixed(2) + '%';
+  const horizonLabel = horizon === 'short' ? '7 trading days' : '30 trading days';
+
+  return `
+    <div class="stock-card">
+      <div class="sc-head">
+        <div>
+          <div style="display:flex;align-items:center">
+            <span class="rank-badge rank-${rank}">${rank}</span>
+            <span class="sc-ticker">${stock.ticker}</span>
+          </div>
+          <div class="sc-name">${stock.name}</div>
+        </div>
+        <div class="signal-badge signal-${pred.signal}">${pred.signal === 'Bullish' ? '▲ ' : pred.signal === 'Bearish' ? '▼ ' : '— '}${pred.signal}</div>
+      </div>
+      <div class="sc-prices">
+        <div class="sc-price-block">
+          <div class="sc-price-label">Current</div>
+          <div class="sc-price-val">$${pred.current_price.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
+        </div>
+        <div class="sc-price-block">
+          <div class="sc-price-label">Predicted</div>
+          <div class="sc-price-val">
+            $${pred.predicted_price.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}
+            <span class="sc-pct ${pctCls}">${pctStr}</span>
+          </div>
+        </div>
+      </div>
+      <div class="sc-chart-wrap">
+        <canvas id="${canvasId}"></canvas>
+      </div>
+      <div class="sc-footer">
+        <div>
+          <div class="sc-conf-label">Model confidence</div>
+          <div class="sc-conf-val">${pred.confidence}%</div>
+        </div>
+        <div class="sc-horizon">Horizon: ${horizonLabel}</div>
+      </div>
+    </div>`;
+}
+
+function renderChart(canvasId, stock, pred) {
+  const ctx = document.getElementById(canvasId);
+  if (!ctx) return;
+
+  const histDates   = stock.history.dates;
+  const histPrices  = stock.history.prices;
+  const futureDates = pred.future_dates || [];
+  const futurePrices = pred.predicted_prices || [];
+
+  // Connector: last historical point bridges to first predicted
+  const bridgeDates  = [histDates[histDates.length - 1], ...futureDates];
+  const bridgePrices = [histPrices[histPrices.length - 1], ...futurePrices];
+
+  const gradient = ctx.getContext('2d').createLinearGradient(0, 0, 0, 160);
+  gradient.addColorStop(0, 'rgba(99,102,241,0.3)');
+  gradient.addColorStop(1, 'rgba(99,102,241,0)');
+
+  const predColor = pred.signal === 'Bullish' ? '#00e676' : pred.signal === 'Bearish' ? '#ff4444' : '#fbbf24';
+
+  if (chartInstances[canvasId]) chartInstances[canvasId].destroy();
+
+  chartInstances[canvasId] = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: [...histDates, ...futureDates],
+      datasets: [
+        {
+          label: 'Historical',
+          data: [...histPrices, ...Array(futureDates.length).fill(null)],
+          borderColor: '#6366f1',
+          backgroundColor: gradient,
+          borderWidth: 2,
+          pointRadius: 0,
+          fill: true,
+          tension: 0.3,
+        },
+        {
+          label: 'Predicted',
+          data: [...Array(histDates.length - 1).fill(null), ...bridgePrices],
+          borderColor: predColor,
+          backgroundColor: 'transparent',
+          borderWidth: 2,
+          borderDash: [4, 3],
+          pointRadius: 0,
+          fill: false,
+          tension: 0.3,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { intersect: false, mode: 'index' },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#1a1d27',
+          borderColor: 'rgba(255,255,255,.08)',
+          borderWidth: 1,
+          titleColor: '#9ca3af',
+          bodyColor: '#e2e8f0',
+          callbacks: {
+            label: ctx => ' $' + ctx.parsed.y?.toFixed(2),
+          },
+        },
+      },
+      scales: {
+        x: {
+          display: false,
+          grid: { display: false },
+        },
+        y: {
+          display: false,
+          grid: { display: false },
+        },
+      },
+    },
+  });
+}
+
+// ── Render a section grid ─────────────────────────────────────────────────
+function renderGrid(containerId, stocks, horizon) {
+  const container = document.getElementById(containerId);
+  container.innerHTML = stocks.map((stock, i) => {
+    const pred     = horizon === 'short' ? stock.short_term : stock.long_term;
+    const canvasId = `chart-${horizon}-${i}`;
+    return buildCard(stock, pred, horizon, i + 1, canvasId);
+  }).join('');
+
+  // Render charts after DOM is ready
+  stocks.forEach((stock, i) => {
+    const pred     = horizon === 'short' ? stock.short_term : stock.long_term;
+    const canvasId = `chart-${horizon}-${i}`;
+    renderChart(canvasId, stock, pred);
+  });
+}
+
+// ── Load data ─────────────────────────────────────────────────────────────
+async function loadData() {
+  try {
+    const res = await fetch('data/predictions.json?t=' + Date.now());
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+
+    // Update header timestamp
+    const dt = new Date(data.updated_at);
+    document.getElementById('lastUpdated').textContent = dt.toLocaleString('en-US', {
+      month: 'short', day: 'numeric', year: 'numeric',
+      hour: '2-digit', minute: '2-digit', timeZoneName: 'short',
+    });
+
+    // Avg short-term gain stat
+    if (data.short_term?.length) {
+      const avg = data.short_term.reduce((s, x) => s + x.short_term.pct_change, 0) / data.short_term.length;
+      document.getElementById('statShortAvg').textContent = '+' + avg.toFixed(1) + '%';
+    }
+
+    renderGrid('grid-short', data.short_term  || [], 'short');
+    renderGrid('grid-long',  data.long_term   || [], 'long');
+
+    document.getElementById('loadingState').style.display = 'none';
+    document.getElementById('appContent').style.display   = 'block';
+
+  } catch (err) {
+    console.error(err);
+    document.getElementById('loadingState').style.display = 'none';
+    document.getElementById('errorState').style.display   = 'block';
+  }
+}
+
+loadData();
+</script>
+</body>
+</html>
