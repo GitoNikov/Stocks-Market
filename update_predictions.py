@@ -1,8 +1,9 @@
 """
 Stock Market Predictions — daily update script
 Fetches S&P 500 data via yfinance, runs linear regression for short-term
-(7 trading days) and long-term (30 trading days) predictions, ranks all
-companies and exports top 5 per category to data/predictions.json
+(7 trading days), mid-term (30 trading days), and long-term (~3 months /
+65 trading days) predictions, ranks all companies and exports top 5 per
+category to data/predictions.json
 """
 
 import json
@@ -21,7 +22,8 @@ warnings.filterwarnings("ignore")
 
 # ── Config ─────────────────────────────────────────────────────────────────
 SHORT_DAYS   = 7    # trading days ahead for short-term prediction
-LONG_DAYS    = 30   # trading days ahead for long-term prediction
+MID_DAYS     = 30   # trading days ahead for mid-term prediction
+LONG_DAYS    = 65   # trading days ahead for long-term prediction (~3 months)
 HISTORY_DAYS = 365  # calendar days of history to fetch
 TOP_N        = 5    # top picks per category
 BATCH_SIZE   = 50   # tickers per yfinance batch request
@@ -136,8 +138,9 @@ def process_ticker(ticker: str, hist: pd.DataFrame, company_name: str) -> dict |
             return None
 
         short = predict(prices, SHORT_DAYS)
+        mid   = predict(prices, MID_DAYS)
         long  = predict(prices, LONG_DAYS)
-        if not short or not long:
+        if not short or not mid or not long:
             return None
 
         # Last 90 calendar days of history for the chart (≈63 trading days)
@@ -148,6 +151,7 @@ def process_ticker(ticker: str, hist: pd.DataFrame, company_name: str) -> dict |
             "ticker":       ticker,
             "name":         company_name,
             "short_term":   short,
+            "mid_term":     mid,
             "long_term":    long,
             "history": {
                 "dates":  [d.strftime("%Y-%m-%d") for d in recent.index],
@@ -161,6 +165,7 @@ def process_ticker(ticker: str, hist: pd.DataFrame, company_name: str) -> dict |
 def main():
     print("📈 Stock Market Predictions — starting update")
     print(f"   Short-term horizon : {SHORT_DAYS} trading days")
+    print(f"   Mid-term horizon   : {MID_DAYS} trading days")
     print(f"   Long-term horizon  : {LONG_DAYS} trading days")
 
     tickers = get_sp500_tickers()
@@ -225,6 +230,13 @@ def main():
         reverse=True,
     )[:TOP_N]
 
+    # Mid-term: highest predicted % gain with Bullish signal
+    mid_ranked = sorted(
+        [r for r in results if r["mid_term"]["signal"] == "Bullish"],
+        key=lambda r: r["mid_term"]["pct_change"],
+        reverse=True,
+    )[:TOP_N]
+
     # Long-term: highest predicted % gain with Bullish signal
     long_ranked = sorted(
         [r for r in results if r["long_term"]["signal"] == "Bullish"],
@@ -241,8 +253,9 @@ def main():
                 dates.append(current.strftime("%Y-%m-%d"))
         return dates
 
-    for stock in short_ranked + long_ranked:
+    for stock in short_ranked + mid_ranked + long_ranked:
         stock["short_term"]["future_dates"] = future_dates(SHORT_DAYS)
+        stock["mid_term"]["future_dates"]   = future_dates(MID_DAYS)
         stock["long_term"]["future_dates"]  = future_dates(LONG_DAYS)
 
     # ── Write JSON ────────────────────────────────────────────────────────
@@ -250,6 +263,7 @@ def main():
     payload = {
         "updated_at":  datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
         "short_term":  short_ranked,
+        "mid_term":    mid_ranked,
         "long_term":   long_ranked,
     }
     with open(OUTPUT_FILE, "w") as f:
@@ -257,6 +271,7 @@ def main():
 
     print(f"\n✅ Saved {OUTPUT_FILE}")
     print(f"   Top 5 short-term: {[s['ticker'] for s in short_ranked]}")
+    print(f"   Top 5 mid-term  : {[s['ticker'] for s in mid_ranked]}")
     print(f"   Top 5 long-term : {[s['ticker'] for s in long_ranked]}")
 
 

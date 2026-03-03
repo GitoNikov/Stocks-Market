@@ -139,6 +139,7 @@ header{background:rgba(13,14,20,.95);backdrop-filter:blur(20px);border-bottom:1p
     <div class="hero-stats">
       <div class="hstat"><div class="hstat-v">500</div><div class="hstat-l">Companies scanned</div></div>
       <div class="hstat"><div class="hstat-v">5</div><div class="hstat-l">Short-term picks</div></div>
+      <div class="hstat"><div class="hstat-v">5</div><div class="hstat-l">Mid-term picks</div></div>
       <div class="hstat"><div class="hstat-v">5</div><div class="hstat-l">Long-term picks</div></div>
       <div class="hstat"><div class="hstat-v" id="statShortAvg">—</div><div class="hstat-l">Avg short gain</div></div>
     </div>
@@ -146,7 +147,8 @@ header{background:rgba(13,14,20,.95);backdrop-filter:blur(20px);border-bottom:1p
 
   <div class="tabs-bar">
     <button class="tab-btn active" onclick="showTab('short')">⚡ Short-Term <span style="font-size:10px;opacity:.6">(~7 days)</span></button>
-    <button class="tab-btn" onclick="showTab('long')">📅 Long-Term <span style="font-size:10px;opacity:.6">(~30 days)</span></button>
+    <button class="tab-btn" onclick="showTab('mid')">📅 Mid-Term <span style="font-size:10px;opacity:.6">(~30 days)</span></button>
+    <button class="tab-btn" onclick="showTab('long')">📆 Long-Term <span style="font-size:10px;opacity:.6">(~3 months)</span></button>
   </div>
 
   <div class="section visible" id="section-short">
@@ -157,10 +159,18 @@ header{background:rgba(13,14,20,.95);backdrop-filter:blur(20px);border-bottom:1p
     <div class="stock-grid" id="grid-short"></div>
   </div>
 
+  <div class="section" id="section-mid">
+    <div class="section-header">
+      <div class="section-title">Top 5 Mid-Term Picks</div>
+      <div class="section-sub">Predicted over the next 30 trading days · Bullish signal only</div>
+    </div>
+    <div class="stock-grid" id="grid-mid"></div>
+  </div>
+
   <div class="section" id="section-long">
     <div class="section-header">
       <div class="section-title">Top 5 Long-Term Picks</div>
-      <div class="section-sub">Predicted over the next 30 trading days · Bullish signal only</div>
+      <div class="section-sub">Predicted over the next ~3 months (65 trading days) · Bullish signal only</div>
     </div>
     <div class="stock-grid" id="grid-long"></div>
   </div>
@@ -178,9 +188,9 @@ header{background:rgba(13,14,20,.95);backdrop-filter:blur(20px);border-bottom:1p
 <script>
 // ── Tab switcher ──────────────────────────────────────────────────────────
 function showTab(tab) {
-  document.querySelectorAll('.tab-btn').forEach((b,i) => b.classList.toggle('active', i === (tab==='short'?0:1)));
-  document.getElementById('section-short').classList.toggle('visible', tab==='short');
-  document.getElementById('section-long').classList.toggle('visible', tab==='long');
+  const tabs = ['short', 'mid', 'long'];
+  document.querySelectorAll('.tab-btn').forEach((b, i) => b.classList.toggle('active', tabs[i] === tab));
+  tabs.forEach(t => document.getElementById('section-' + t).classList.toggle('visible', t === tab));
 }
 
 // ── Build a stock card ───────────────────────────────────────────────────
@@ -190,7 +200,7 @@ function buildCard(stock, pred, horizon, rank, canvasId) {
   const pct    = pred.pct_change;
   const pctCls = pct > 0 ? 'up' : pct < 0 ? 'down' : 'flat';
   const pctStr = (pct > 0 ? '+' : '') + pct.toFixed(2) + '%';
-  const horizonLabel = horizon === 'short' ? '7 trading days' : '30 trading days';
+  const horizonLabel = horizon === 'short' ? '7 trading days' : horizon === 'mid' ? '30 trading days' : '~3 months (65 trading days)';
 
   return `
     <div class="stock-card">
@@ -314,14 +324,14 @@ function renderChart(canvasId, stock, pred) {
 function renderGrid(containerId, stocks, horizon) {
   const container = document.getElementById(containerId);
   container.innerHTML = stocks.map((stock, i) => {
-    const pred     = horizon === 'short' ? stock.short_term : stock.long_term;
+    const pred     = horizon === 'short' ? stock.short_term : horizon === 'mid' ? stock.mid_term : stock.long_term;
     const canvasId = `chart-${horizon}-${i}`;
     return buildCard(stock, pred, horizon, i + 1, canvasId);
   }).join('');
 
   // Render charts after DOM is ready
   stocks.forEach((stock, i) => {
-    const pred     = horizon === 'short' ? stock.short_term : stock.long_term;
+    const pred     = horizon === 'short' ? stock.short_term : horizon === 'mid' ? stock.mid_term : stock.long_term;
     const canvasId = `chart-${horizon}-${i}`;
     renderChart(canvasId, stock, pred);
   });
@@ -347,8 +357,9 @@ async function loadData() {
       document.getElementById('statShortAvg').textContent = '+' + avg.toFixed(1) + '%';
     }
 
-    renderGrid('grid-short', data.short_term  || [], 'short');
-    renderGrid('grid-long',  data.long_term   || [], 'long');
+    renderGrid('grid-short', data.short_term || [], 'short');
+    renderGrid('grid-mid',   data.mid_term   || [], 'mid');
+    renderGrid('grid-long',  data.long_term  || [], 'long');
 
     document.getElementById('loadingState').style.display = 'none';
     document.getElementById('appContent').style.display   = 'block';
